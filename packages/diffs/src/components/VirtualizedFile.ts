@@ -408,22 +408,25 @@ export class VirtualizedFile<
     return hasHeightChange;
   }
 
-  public onRender = (dirty: boolean): boolean => {
-    const file = this.getInputFile();
-    if (this.fileContainer == null || file == null) {
-      return false;
-    }
-    // Wrapper changes can move an unchanged off-screen placeholder without
-    // changing its contents or height. Measure it when it becomes visible
-    // instead of rebuilding every placeholder during a virtualizer pass.
-    if (
+  // Leave a hidden placeholder untouched when its prepared layout is current
+  // and no forced render is waiting. Measure its position when it is shown.
+  private isIdlePlaceholder(): boolean {
+    return (
       this.isSimpleMode() &&
       !this.isVisible &&
       this.placeHolder != null &&
       !this.layoutDirty &&
       this.pendingRender != null &&
       !this.forceRenderOverride
-    ) {
+    );
+  }
+
+  public onRender = (dirty: boolean): boolean => {
+    const file = this.getInputFile();
+    if (this.fileContainer == null || file == null) {
+      return false;
+    }
+    if (this.isIdlePlaceholder()) {
       if (dirty) {
         this.top = undefined;
       }

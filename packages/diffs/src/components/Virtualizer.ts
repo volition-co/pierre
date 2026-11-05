@@ -358,9 +358,6 @@ export class Virtualizer {
   // Finish the synchronous mount batch before measuring, while still rendering
   // visible code before the browser's first paint, including mounts inside rAF.
   private renderInitialInstances = (): void => {
-    if (!this.initialRenderQueued) {
-      return;
-    }
     this.initialRenderQueued = false;
     if (this.root == null || this.pendingVisibility.size === 0) {
       return;
@@ -378,8 +375,7 @@ export class Virtualizer {
     }
     const rootTop =
       this.getScrollContainerElement()?.getBoundingClientRect().top ?? 0;
-    const margin = this.config.intersectionObserverMargin;
-    const bottom = this.getHeight() + margin;
+    const scrollOffset = this.getScrollTop() - rootTop;
     const measurements: {
       container: HTMLElement;
       instance: SubscribedInstance;
@@ -398,8 +394,7 @@ export class Virtualizer {
           // display:none on the file or an ancestor has no visible area.
           rect.width > 0 &&
           rect.height > 0 &&
-          rect.bottom - rootTop >= -margin &&
-          rect.top - rootTop <= bottom,
+          this.isInstanceVisible(rect.top + scrollOffset, rect.height),
       });
     }
     this.pendingVisibility.clear();
