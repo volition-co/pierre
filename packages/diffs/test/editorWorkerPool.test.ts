@@ -1003,6 +1003,7 @@ describe('VirtualizedFileDiff worker rendering', () => {
       expect(instance.render({ fileDiff: currentDiff, fileContainer })).toBe(
         true
       );
+      await Promise.resolve();
       expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('current');
       dom.triggerIntersectionObserver(fileContainer, true);
       await waitFor(() => expect(onRender).toHaveReturnedWith(false));
@@ -1107,6 +1108,7 @@ describe('VirtualizedFile worker rendering', () => {
       virtualizer.setup(root, content);
 
       expect(instance.render({ file: currentFile, fileContainer })).toBe(true);
+      await Promise.resolve();
       expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('current');
       dom.triggerIntersectionObserver(fileContainer, true);
       await waitFor(() => expect(onRender).toHaveReturnedWith(false));
@@ -1913,7 +1915,12 @@ describe('rendering when an editor attaches', () => {
       const virtualizer = {
         type: 'simple',
         config: {},
-        connect() {},
+        connect(
+          _container: HTMLElement,
+          target: { setVisibility(visible: boolean): void }
+        ) {
+          target.setVisibility(true);
+        },
         disconnect() {},
         getRoot: () => root,
         getWindowSpecs: () => ({ top: 0, bottom: 800 }),

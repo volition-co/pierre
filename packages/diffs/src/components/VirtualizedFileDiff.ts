@@ -541,6 +541,16 @@ export class VirtualizedFileDiff<
     if (this.fileContainer == null) {
       return false;
     }
+    // Initial offscreen placeholders already have their estimated height.
+    // Leave them alone until visibility or a layout change requires work.
+    if (
+      !this.isVisible &&
+      this.placeHolder != null &&
+      this.getRenderedDiff() == null &&
+      !this.layoutDirty
+    ) {
+      return false;
+    }
     if (dirty) {
       this.top = this.getVirtualizedTop();
     }
@@ -1472,7 +1482,6 @@ export class VirtualizedFileDiff<
     if (!isSetup) {
       this.computeApproximateSize(false, pendingRenderDiff);
       const virtualizer = this.getSimpleVirtualizer();
-      this.top ??= this.getVirtualizedTop();
       if (this.isAdvancedMode()) {
         this.isVisible = true;
       } else {
@@ -1481,15 +1490,11 @@ export class VirtualizedFileDiff<
             'VirtualizedFileDiff.render: simple virtualizer is not available'
           );
         }
+        // Measure visibility after initial placeholders have their heights.
         virtualizer.connect(fileContainer, this);
-        this.isVisible = virtualizer.isInstanceVisible(
-          this.top ?? 0,
-          this.height
-        );
       }
       this.isSetup = true;
     } else {
-      this.top ??= this.getVirtualizedTop();
       if (this.layoutDirty && this.isSimpleMode()) {
         this.getSimpleVirtualizer()?.markDOMDirty();
         this.computeApproximateSize(false, pendingRenderDiff);
@@ -1507,6 +1512,7 @@ export class VirtualizedFileDiff<
       return this.renderPlaceholder(this.height);
     }
 
+    this.top ??= this.getVirtualizedTop();
     const windowSpecs = this.virtualizer.getWindowSpecs();
     const fileTop = this.top ?? 0;
     const renderRange = this.computeRenderRangeFromWindow(
@@ -1545,6 +1551,11 @@ export class VirtualizedFileDiff<
     // (wrapped lines, annotation heights) survive layout resets.
     if (this.isSimpleMode()) {
       this.getSimpleVirtualizer()?.requestHeightReconcile(this);
+      // A replacement can finish highlighting while hidden. Schedule its
+      // return to a placeholder even when the measured height is unchanged.
+      if (!this.isVisible) {
+        this.getSimpleVirtualizer()?.instanceChanged(this, false);
+      }
     }
   }
 

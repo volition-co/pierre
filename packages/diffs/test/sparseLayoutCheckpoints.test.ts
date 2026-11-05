@@ -90,6 +90,12 @@ async function createRenderedFileFixture(
     {},
     {
       ...virtualizerBase,
+      connect(
+        _container: HTMLElement,
+        target: { setVisibility(visible: boolean): void }
+      ) {
+        target.setVisibility(true);
+      },
       getWindowSpecs: () => window,
       markDOMDirty() {},
       requestHeightReconcile() {},

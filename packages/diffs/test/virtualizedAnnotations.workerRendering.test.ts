@@ -60,7 +60,13 @@ async function createFixture(
   const virtualizer = {
     type: mode,
     config: {},
-    connect() {},
+    // This fixture controls rendering itself and keeps connected items visible.
+    connect(
+      _container: HTMLElement,
+      instance: { setVisibility(visible: boolean): void }
+    ) {
+      instance.setVisibility(true);
+    },
     disconnect() {},
     getWindowSpecs: () => window,
     getOffsetInScrollContainer: () => 0,

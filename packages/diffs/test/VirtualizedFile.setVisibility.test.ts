@@ -1,8 +1,15 @@
-import { expect, test } from 'bun:test';
+import { expect, spyOn, test } from 'bun:test';
 
 import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { Virtualizer } from '../src/components/Virtualizer';
 import { createRoot, installDom, makeFile, wait, waitFor } from './domHarness';
+import { createInitializedManager } from './workerPoolHarness';
+
+class TestVirtualizedFile extends VirtualizedFile {
+  getRenderedFileForTest() {
+    return this.getRenderedFile();
+  }
+}
 
 // Simple-mode hide swaps rendered rows for a placeholder but must also drop
 // the stored render range: re-showing with an unchanged scroll window
@@ -64,6 +71,80 @@ test('re-showing a hidden file with an unchanged window re-renders content', asy
     instance?.cleanUp();
     virtualizer.cleanUp();
     await wait(10);
+    dom.cleanup();
+  }
+});
+
+test('mounts placeholders without offset reads and renders before observer delivery', async () => {
+  const dom = installDom();
+  const { manager } = await createInitializedManager({ theme: 'pierre-dark' });
+  const root = createRoot();
+  const virtualizer = new Virtualizer();
+  const instances: TestVirtualizedFile[] = [];
+  const containers: HTMLElement[] = [];
+  virtualizer.setup(root);
+  const offsetRead = spyOn(virtualizer, 'getOffsetInScrollContainer');
+  const visibilityRead = spyOn(virtualizer, 'isInstanceVisible');
+
+  try {
+    for (let index = 0; index < 50; index++) {
+      const container = document.createElement('diffs-container');
+      root.appendChild(container);
+      containers.push(container);
+      container.getBoundingClientRect = () => ({
+        ...root.getBoundingClientRect(),
+        top: index === 0 ? 0 : 10_000 + index * 1000,
+        bottom: index === 0 ? 100 : 10_100 + index * 1000,
+        height: 100,
+      });
+      const instance = new TestVirtualizedFile(
+        {},
+        virtualizer,
+        undefined,
+        manager,
+        () => undefined
+      );
+      instances.push(instance);
+      const file = {
+        name: `mount-${index}.txt`,
+        contents: `value ${index}\n`,
+        cacheKey: `mount-${index}`,
+      };
+      instance.render({ file, fileContainer: container });
+      // A repeat render before observation must also avoid measuring top.
+      instance.render({ file, fileContainer: container });
+      const placeholder =
+        container.shadowRoot?.querySelector<HTMLElement>('[data-placeholder]');
+      expect(parseFloat(placeholder?.style.height ?? '0')).toBe(
+        instance.height
+      );
+      expect(instance.height).toBeGreaterThan(0);
+      expect(instance.top).toBeUndefined();
+      expect(instance.getRenderedFileForTest()).toBeUndefined();
+    }
+    expect(offsetRead).not.toHaveBeenCalled();
+    expect(visibilityRead).not.toHaveBeenCalled();
+
+    const first = containers[0];
+    if (first == null) throw new Error('Missing first container');
+    // No observer callback or animation frame is needed for initial visibility.
+    await Promise.resolve();
+    expect(first.shadowRoot?.querySelector('[data-line]')).not.toBeNull();
+    await waitFor(() => first.shadowRoot?.querySelector('[data-line]') != null);
+    expect(first.shadowRoot?.querySelector('[data-placeholder]')).toBeNull();
+    expect(first.shadowRoot?.querySelector('pre')?.textContent).toContain(
+      'value 0'
+    );
+    expect(offsetRead).toHaveBeenCalled();
+    for (const instance of instances.slice(1)) {
+      expect(instance.getRenderedFileForTest()).toBeUndefined();
+    }
+  } finally {
+    for (const instance of instances) instance.cleanUp();
+    virtualizer.cleanUp();
+    offsetRead.mockRestore();
+    visibilityRead.mockRestore();
+    manager.terminate();
     dom.cleanup();
   }
 });

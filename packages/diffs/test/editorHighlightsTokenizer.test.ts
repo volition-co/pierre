@@ -39,9 +39,11 @@ test.each(['file', 'virtualized'])(
       disableErrorHandling: true,
       disableFileHeader: true,
     };
+    const virtualizer = type === 'virtualized' ? new Virtualizer() : undefined;
+    virtualizer?.setup(document);
     const file =
-      type === 'virtualized'
-        ? new VirtualizedFile(options, new Virtualizer())
+      virtualizer != null
+        ? new VirtualizedFile(options, virtualizer)
         : new File(options);
     const editor = new Editor('file');
     try {
@@ -107,6 +109,7 @@ test.each(['file', 'virtualized'])(
     } finally {
       editor.cleanUp();
       file.cleanUp();
+      virtualizer?.cleanUp();
       dom.cleanup();
     }
   }

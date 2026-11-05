@@ -800,6 +800,9 @@ describe('VirtualizedFileDiff partial hydration', () => {
         preventEmit: true,
       });
 
+      expect(loadCalls).toBe(0);
+      instance.setVisibility(true);
+      instance.render({ deferManagers: true, preventEmit: true });
       expect(loadCalls).toBe(1);
       await waitForHydrated(instance);
 

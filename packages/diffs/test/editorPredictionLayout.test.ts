@@ -107,7 +107,13 @@ function createRecordingVirtualizer(root: HTMLElement) {
   const virtualizer = {
     type: 'simple',
     config: {},
-    connect() {},
+    // This fixture controls rendering itself and keeps connected items visible.
+    connect(
+      _container: HTMLElement,
+      instance: { setVisibility(visible: boolean): void }
+    ) {
+      instance.setVisibility(true);
+    },
     disconnect() {},
     getRoot: () => root,
     getWindowSpecs: () => ({ top: 0, bottom: 800 }),

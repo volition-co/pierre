@@ -80,6 +80,8 @@ export class Virtualizer {
   private heightDirty = true;
   private scrollHeightDirty = true;
   private renderedObservers = 0;
+  private initialRenderQueued = false;
+  private initialVisibility = new Map<HTMLElement, SubscribedInstance>();
   private connectQueue: Map<HTMLElement, SubscribedInstance> = new Map();
 
   constructor(config?: Partial<VirtualizerConfig>) {
@@ -260,6 +262,7 @@ export class Virtualizer {
     this.instancesChanged.clear();
     this.reconcileQueue.clear();
     this.connectQueue.clear();
+    this.initialVisibility.clear();
     this.visibleInstancesDirty = false;
     this.windowSpecs = { top: 0, bottom: 0 };
     this.scrollTop = 0;
@@ -289,6 +292,16 @@ export class Virtualizer {
       // FIXME(amadeus): Go through the connection phase a bit more closely...
       this.intersectionObserver.observe(container);
       this.observers.set(container, instance);
+      this.initialVisibility.set(container, instance);
+      if (!this.initialRenderQueued) {
+        this.initialRenderQueued = true;
+        queueMicrotask(() => {
+          this.initialRenderQueued = false;
+          if (this.initialVisibility.size > 0) {
+            this.computeRenderRangeAndEmit();
+          }
+        });
+      }
       this.instancesChanged.add(instance);
       this.markDOMDirty();
       queueRender(this.computeRenderRangeAndEmit);
@@ -299,6 +312,7 @@ export class Virtualizer {
   disconnect(container: HTMLElement): void {
     const instance = this.observers.get(container);
     this.connectQueue.delete(container);
+    this.initialVisibility.delete(container);
     if (instance == null) {
       return;
     }
@@ -345,11 +359,37 @@ export class Virtualizer {
     queueRender(this.computeRenderRangeAndEmit);
   };
 
+  // Read new containers together after their placeholders have been mounted.
+  // The microtask renders visible content before paint without waiting for an
+  // IntersectionObserver callback or interleaving layout reads with mounting.
+  private measureInitialVisibility(): void {
+    const visible: [HTMLElement, SubscribedInstance][] = [];
+    for (const [container, instance] of this.initialVisibility) {
+      if (
+        this.isInstanceVisible(
+          this.getOffsetInScrollContainer(container),
+          container.getBoundingClientRect().height
+        )
+      ) {
+        visible.push([container, instance]);
+      }
+    }
+    this.initialVisibility.clear();
+    for (const [container, instance] of visible) {
+      if (!this.visibleInstances.has(container)) {
+        instance.setVisibility(true);
+        this.visibleInstances.set(container, instance);
+        this.visibleInstancesDirty = true;
+      }
+    }
+  }
+
   private computeRenderRangeAndEmit = () => {
     if (Virtualizer.__STOP) {
       return;
     }
     const wrapperDirty = this.heightDirty || this.scrollHeightDirty;
+    this.measureInitialVisibility();
     let instancesHaveChanged = this.instancesChanged.size > 0;
 
     // If we got an emitted update from a bunch of instances, we should skip
@@ -587,6 +627,7 @@ export class Virtualizer {
           'Virtualizer.handleIntersectionChange: target not an HTMLElement'
         );
       }
+      this.initialVisibility.delete(target);
       const instance = this.observers.get(target);
       // IntersectionObserver delivers entries asynchronously, so an entry can
       // arrive after the target was unobserved via disconnect() or releaseElement().

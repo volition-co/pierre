@@ -89,8 +89,11 @@ describe('editing before a cold first render completes', () => {
       virtualizer
     );
     expect(instance.render({ file, fileContainer, forceRender: true })).toBe(
-      false
+      true
     );
+    expect(
+      fileContainer.shadowRoot?.querySelector('[data-placeholder]')
+    ).not.toBeNull();
     editor.edit(instance);
     await expectEditableAfterHighlight();
     editor.cleanUp();
@@ -110,7 +113,10 @@ describe('editing before a cold first render completes', () => {
       );
       expect(
         instance.render({ fileDiff, fileContainer, forceRender: true })
-      ).toBe(false);
+      ).toBe(true);
+      expect(
+        fileContainer.shadowRoot?.querySelector('[data-placeholder]')
+      ).not.toBeNull();
       editor.edit(instance);
       await expectEditableAfterHighlight();
       editor.cleanUp();
