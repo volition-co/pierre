@@ -35,6 +35,7 @@ test('re-showing a hidden file with an unchanged window re-renders content', asy
       }
     );
     instance.render({ file, fileContainer: container });
+    dom.triggerIntersectionObserver(container, true);
     // Highlighting can finish after the first render; wait for actual rows.
     await waitFor(
       () => container.shadowRoot?.textContent?.includes('line 1') === true

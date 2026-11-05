@@ -61,6 +61,7 @@ test('updates the rendered header when a live instance swaps to a renamed file',
       file: makeNamedFile('before.ts'),
       fileContainer: container,
     });
+    dom.triggerIntersectionObserver(container, true);
     await waitFor(() => headerText(container).includes('before.ts'));
     expect(headerText(container)).toContain('before.ts');
 
@@ -103,6 +104,7 @@ test('prepareCodeViewItem drops measured heights when the file is replaced', asy
     );
     const wrappedFile = makeNamedFile('wrapped.ts');
     instance.render({ file: wrappedFile, fileContainer: container });
+    dom.triggerIntersectionObserver(container, true);
     // Prime the prepare hook the way CodeView does on every layout pass —
     // the first call latches internal state (currentCollapsed) whose initial
     // transition forces a reset that would mask the swap below. Its return
@@ -151,6 +153,7 @@ test('updates the header when the swap lands while the file is hidden', async ()
       file: makeNamedFile('before.ts'),
       fileContainer: container,
     });
+    dom.triggerIntersectionObserver(container, true);
     await waitFor(() => headerText(container).includes('before.ts'));
     expect(headerText(container)).toContain('before.ts');
 

@@ -395,7 +395,11 @@ export class Virtualizer {
         container,
         instance,
         visible:
-          rect.bottom - rootTop >= -margin && rect.top - rootTop <= bottom,
+          // display:none on the file or an ancestor has no visible area.
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rect.bottom - rootTop >= -margin &&
+          rect.top - rootTop <= bottom,
       });
     }
     this.pendingVisibility.clear();

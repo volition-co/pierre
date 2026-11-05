@@ -3,9 +3,26 @@ import { expect, test } from 'bun:test';
 import { Virtualizer } from '../src/components/Virtualizer';
 import { installDom } from './domHarness';
 
+// Match the browser rectangle when display:none removes a file from layout.
+function emptyRect(): DOMRect {
+  return {
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    width: 0,
+    height: 0,
+    x: 0,
+    y: 0,
+    toJSON() {
+      return {};
+    },
+  };
+}
+
 // Hold frames so visibility and read/write ordering can be checked on the very
 // first paint, without delivering any IntersectionObserver events.
-function createFixture() {
+function createFixture(intersectionObserverMargin = 0) {
   const dom = installDom();
   const frames = new Map<number, FrameRequestCallback>();
   let nextFrame = 0;
@@ -36,11 +53,14 @@ function createFixture() {
       return {};
     },
   });
-  const virtualizer = new Virtualizer({ intersectionObserverMargin: 0 });
+  const virtualizer = new Virtualizer({ intersectionObserverMargin });
   const events: string[] = [];
   const items = [0, 1000, 1500, 9000].map((top, index) => {
     const container = document.createElement('diffs-container');
     content.appendChild(container);
+    Object.defineProperty(container, 'offsetHeight', {
+      get: () => (container.style.display === 'none' ? 0 : 500),
+    });
     container.getBoundingClientRect = () => {
       events.push(`read:${index}`);
       const rect = root.getBoundingClientRect();
@@ -171,6 +191,55 @@ test('cleanup cancels the initial mount microtask', async () => {
     fixture.cleanup();
   }
 });
+
+test('zero-size files stay hidden until the observer reports visible layout', async () => {
+  const fixture = createFixture(4000);
+  const { root, content, virtualizer, items, dom, events } = fixture;
+  const { container, instance } = items[1];
+  const measure = container.getBoundingClientRect;
+  try {
+    container.style.display = 'none';
+    container.getBoundingClientRect = emptyRect;
+    virtualizer.setup(root, content);
+    virtualizer.connect(container, instance);
+    await Promise.resolve();
+    expect(instance.visible).toBe(false);
+    expect(events).not.toContain('visibility:1');
+
+    container.style.display = '';
+    container.getBoundingClientRect = measure;
+    dom.triggerIntersectionObserver(container, true);
+    expect(instance.visible).toBe(true);
+    expect(events).toContain('visibility:1');
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+for (const initiallyHidden of [false, true]) {
+  test(`initial visibility uses the final layout when a file starts ${initiallyHidden ? 'hidden' : 'shown'} and toggles during mounting`, async () => {
+    const fixture = createFixture(4000);
+    const { root, content, virtualizer, items, events } = fixture;
+    const { container, instance } = items[1];
+    const measure = container.getBoundingClientRect;
+    try {
+      container.style.display = initiallyHidden ? 'none' : 'block';
+      container.getBoundingClientRect = () =>
+        container.style.display === 'none' ? emptyRect() : measure();
+      virtualizer.setup(root, content);
+      virtualizer.connect(container, instance);
+      expect(events).toEqual([]);
+
+      // Host mounting can change pane visibility after the child connects but
+      // before the queued batch measures its final layout.
+      container.style.display = initiallyHidden ? 'block' : 'none';
+      await Promise.resolve();
+      expect(instance.visible).toBe(initiallyHidden);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+}
 
 test('initial visibility uses the document viewport and scroll position', async () => {
   const fixture = createFixture();
