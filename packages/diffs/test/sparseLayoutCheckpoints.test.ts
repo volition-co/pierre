@@ -27,7 +27,13 @@ const metrics: VirtualFileMetrics & { hunkSeparatorHeight: number } = {
 const virtualizerBase = {
   type: 'simple',
   config: {},
-  connect() {},
+  connect(
+    _container: unknown,
+    instance: { onRender(dirty: boolean): boolean }
+  ) {
+    // Mimic Virtualizer's deferred first pass.
+    queueMicrotask(() => instance.onRender(true));
+  },
   disconnect() {},
   getWindowSpecs() {
     return { top: 0, bottom: 1000 };

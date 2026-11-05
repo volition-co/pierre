@@ -36,7 +36,10 @@ const nextConfig = {
   reactStrictMode: true,
   reactCompiler: true,
   devIndicators: false,
-  // allowedDevOrigins: [],
+  // Allow the Superconductor preview host to load development assets and HMR.
+  allowedDevOrigins: process.env.AGENT_WEB_HOST
+    ? [process.env.AGENT_WEB_HOST]
+    : [],
   // Resolve and transpile workspace packages so subpath exports (e.g. @pierre/trees/react)
   // resolve correctly when Next follows client-component imports from the server.
   transpilePackages: ['@pierre/trees', '@pierre/diffs'],

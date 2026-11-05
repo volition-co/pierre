@@ -15,7 +15,13 @@ function createSimpleVirtualizer(root: HTMLElement) {
   return {
     type: 'simple',
     config: {},
-    connect() {},
+    connect(
+      _container: unknown,
+      instance: { onRender(dirty: boolean): boolean }
+    ) {
+      // Mimic Virtualizer's deferred first pass.
+      queueMicrotask(() => instance.onRender(true));
+    },
     disconnect() {},
     getRoot: () => root,
     getWindowSpecs: () => ({ top: 0, bottom: 800 }),

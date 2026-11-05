@@ -101,6 +101,8 @@ export class VirtualizedFile<
   private pendingRender: PendingRender | undefined;
   private isVisible: boolean = false;
   private isSetup: boolean = false;
+  // Resolve visibility on the virtualizer's first pass.
+  private needsInitialVisibility: boolean = false;
   private layoutDirty = true;
   private currentCollapsed: boolean | undefined;
 
@@ -415,9 +417,30 @@ export class VirtualizedFile<
     }
     if (dirty) {
       this.top = this.getVirtualizedTop();
+      this.resolveInitialVisibility();
     }
     return this.render({ file });
   };
+
+  // Show on-screen files without waiting for IntersectionObserver.
+  private resolveInitialVisibility(): void {
+    if (!this.needsInitialVisibility || this.top == null) {
+      return;
+    }
+    this.needsInitialVisibility = false;
+    const virtualizer = this.getSimpleVirtualizer();
+    if (virtualizer == null || this.isVisible) {
+      return;
+    }
+    // Hidden (display: none) reads top 0; leave it to the observer.
+    if (this.fileContainer?.checkVisibility?.() === false) {
+      return;
+    }
+    if (virtualizer.isInstanceVisible(this.top, this.height)) {
+      this.renderRange = undefined;
+      this.isVisible = true;
+    }
+  }
 
   // CodeView positions every item before updating the DOM. Recalculate this
   // item's layout whenever its content or position changes.
@@ -782,6 +805,7 @@ export class VirtualizedFile<
       return;
     }
     this.renderRange = undefined;
+    this.needsInitialVisibility = false;
     if (visible && !this.isVisible) {
       this.top = this.getVirtualizedTop();
       this.isVisible = true;
@@ -916,7 +940,6 @@ export class VirtualizedFile<
     if (!isSetup) {
       this.computeApproximateSize(false, pendingRenderFile);
       const virtualizer = this.getSimpleVirtualizer();
-      this.top ??= this.getVirtualizedTop();
       if (this.isAdvancedMode()) {
         this.isVisible = true;
       } else {
@@ -925,15 +948,12 @@ export class VirtualizedFile<
             'VirtualizedFile.render: simple virtualizer is not available'
           );
         }
+        // Skip measuring here; avoids a forced layout per mounted file.
+        this.needsInitialVisibility = true;
         virtualizer.connect(fileContainer, this);
-        this.isVisible = virtualizer.isInstanceVisible(
-          this.top ?? 0,
-          this.height
-        );
       }
       this.isSetup = true;
     } else {
-      this.top ??= this.getVirtualizedTop();
       if (this.layoutDirty && this.isSimpleMode()) {
         this.getSimpleVirtualizer()?.markDOMDirty();
         this.computeApproximateSize(false, pendingRenderFile);
@@ -951,6 +971,8 @@ export class VirtualizedFile<
       return this.renderPlaceholder(this.height);
     }
 
+    // Placeholders don't need top; measure lazily.
+    this.top ??= this.getVirtualizedTop();
     const windowSpecs = this.virtualizer.getWindowSpecs();
     const fileTop = this.top ?? 0;
     const renderRange = this.computeRenderRangeFromWindow(

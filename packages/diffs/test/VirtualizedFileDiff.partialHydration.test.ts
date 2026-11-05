@@ -57,7 +57,13 @@ function createVirtualizer(visible = true): {
   const virtualizer = {
     config: { resizeDebugging: false },
     type: 'simple',
-    connect() {},
+    connect(
+      _container: unknown,
+      instance: { onRender(dirty: boolean): boolean }
+    ) {
+      // Mimic Virtualizer's deferred first pass.
+      queueMicrotask(() => instance.onRender(true));
+    },
     disconnect() {},
     getOffsetInScrollContainer() {
       return 0;
@@ -799,6 +805,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
         deferManagers: true,
         preventEmit: true,
       });
+      await wait(0);
 
       expect(loadCalls).toBe(1);
       await waitForHydrated(instance);

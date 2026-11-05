@@ -60,7 +60,13 @@ async function createFixture(
   const virtualizer = {
     type: mode,
     config: {},
-    connect() {},
+    connect(
+      _container: unknown,
+      instance: { onRender(dirty: boolean): boolean }
+    ) {
+      // Mimic Virtualizer's deferred first pass.
+      queueMicrotask(() => instance.onRender(true));
+    },
     disconnect() {},
     getWindowSpecs: () => window,
     getOffsetInScrollContainer: () => 0,

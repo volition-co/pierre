@@ -1003,9 +1003,11 @@ describe('VirtualizedFileDiff worker rendering', () => {
       expect(instance.render({ fileDiff: currentDiff, fileContainer })).toBe(
         true
       );
-      expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('current');
       dom.triggerIntersectionObserver(fileContainer, true);
-      await waitFor(() => expect(onRender).toHaveReturnedWith(false));
+      // Content lands on the virtualizer's first frame.
+      await waitFor(() =>
+        expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('current')
+      );
 
       // The replacement keeps the highlighted current diff visible, and the
       // following real virtualizer frame records that current diff for layout.
@@ -1107,9 +1109,11 @@ describe('VirtualizedFile worker rendering', () => {
       virtualizer.setup(root, content);
 
       expect(instance.render({ file: currentFile, fileContainer })).toBe(true);
-      expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('current');
       dom.triggerIntersectionObserver(fileContainer, true);
-      await waitFor(() => expect(onRender).toHaveReturnedWith(false));
+      // Content lands on the virtualizer's first frame.
+      await waitFor(() =>
+        expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('current')
+      );
 
       expect(instance.render({ file: replacementFile })).toBe(true);
       onRender.mockClear();
@@ -1913,7 +1917,13 @@ describe('rendering when an editor attaches', () => {
       const virtualizer = {
         type: 'simple',
         config: {},
-        connect() {},
+        connect(
+          _container: unknown,
+          instance: { onRender(dirty: boolean): boolean }
+        ) {
+          // Mimic Virtualizer's deferred first pass.
+          queueMicrotask(() => instance.onRender(true));
+        },
         disconnect() {},
         getRoot: () => root,
         getWindowSpecs: () => ({ top: 0, bottom: 800 }),
