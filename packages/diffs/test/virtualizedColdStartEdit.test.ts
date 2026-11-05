@@ -89,8 +89,10 @@ describe('editing before a cold first render completes', () => {
       virtualizer
     );
     expect(instance.render({ file, fileContainer, forceRender: true })).toBe(
-      false
+      true
     );
+    dom.triggerIntersectionObserver(fileContainer, true);
+    expect(instance.render({ file, forceRender: true })).toBe(false);
     editor.edit(instance);
     await expectEditableAfterHighlight();
     editor.cleanUp();
@@ -110,7 +112,9 @@ describe('editing before a cold first render completes', () => {
       );
       expect(
         instance.render({ fileDiff, fileContainer, forceRender: true })
-      ).toBe(false);
+      ).toBe(true);
+      dom.triggerIntersectionObserver(fileContainer, true);
+      expect(instance.render({ forceRender: true })).toBe(false);
       editor.edit(instance);
       await expectEditableAfterHighlight();
       editor.cleanUp();

@@ -1358,7 +1358,8 @@ describe('React editor factory lifecycle', () => {
   }
 
   test('cleans StrictMode and virtualized edit passes without leaks', async () => {
-    const { cleanup } = installDom();
+    const dom = installDom();
+    const { cleanup } = dom;
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -1413,6 +1414,12 @@ describe('React editor factory lifecycle', () => {
         await wait(20);
       });
 
+      await act(async () => {
+        for (const host of container.querySelectorAll('diffs-container')) {
+          dom.triggerIntersectionObserver(host, true);
+        }
+        await wait(20);
+      });
       await waitFor(() => onAttach.mock.calls.length >= 2);
       await wait(0);
       // StrictMode's simulated destroy/re-create pass gets fresh editors from

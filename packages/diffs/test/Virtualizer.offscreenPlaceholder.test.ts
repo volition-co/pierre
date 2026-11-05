@@ -588,6 +588,11 @@ describe.each(['file', 'split', 'unified'] as const)(
           // content ResizeObserver, which jsdom does not provide. The clean-pass
           // variant checks the virtualizer's own change notification instead.
           if (!wrapperDirty) {
+            expect(following.instance.top).toBeUndefined();
+            // Hidden placeholders defer position reads until visibility returns.
+            fixture.virtualizer.scrollTo({ top: 10_000 });
+            fixture.dom.triggerIntersectionObserver(following.container, true);
+            fixture.flushFrames(10);
             expect(following.instance.top).toBe(baselineTop);
           }
         } finally {

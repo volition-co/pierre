@@ -379,6 +379,8 @@ describe('virtualized render completion before notifications', () => {
         try {
           virtualizer.setup(root);
           render('alpha\n');
+          dom.triggerIntersectionObserver(fileContainer, true);
+          instance.onRender(false);
           if (instance.type === 'file' && editor.type === 'file') {
             editor.edit(instance);
           } else if (

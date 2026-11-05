@@ -67,6 +67,8 @@ export class Virtualizer {
 
   private resizeObserver: ResizeObserver | undefined;
   private observers: Map<HTMLElement, SubscribedInstance> = new Map();
+  private pendingVisibility: Set<HTMLElement> = new Set();
+  private initialRenderQueued: boolean = false;
   private visibleInstances: Map<HTMLElement, SubscribedInstance> = new Map();
   private visibleInstancesDirty: boolean = false;
   private instancesChanged: Set<SubscribedInstance> = new Set();
@@ -256,6 +258,8 @@ export class Virtualizer {
     this.root = undefined;
     this.contentContainer = undefined;
     this.observers.clear();
+    this.pendingVisibility.clear();
+    this.initialRenderQueued = false;
     this.visibleInstances.clear();
     this.instancesChanged.clear();
     this.reconcileQueue.clear();
@@ -289,9 +293,14 @@ export class Virtualizer {
       // FIXME(amadeus): Go through the connection phase a bit more closely...
       this.intersectionObserver.observe(container);
       this.observers.set(container, instance);
+      this.pendingVisibility.add(container);
       this.instancesChanged.add(instance);
       this.markDOMDirty();
       queueRender(this.computeRenderRangeAndEmit);
+      if (!this.initialRenderQueued) {
+        this.initialRenderQueued = true;
+        queueMicrotask(this.renderInitialInstances);
+      }
     }
     return () => this.disconnect(container);
   }
@@ -299,6 +308,7 @@ export class Virtualizer {
   disconnect(container: HTMLElement): void {
     const instance = this.observers.get(container);
     this.connectQueue.delete(container);
+    this.pendingVisibility.delete(container);
     if (instance == null) {
       return;
     }
@@ -345,17 +355,71 @@ export class Virtualizer {
     queueRender(this.computeRenderRangeAndEmit);
   };
 
+  // Finish the synchronous mount batch before measuring, while still rendering
+  // visible code before the browser's first paint, including mounts inside rAF.
+  private renderInitialInstances = (): void => {
+    if (!this.initialRenderQueued) {
+      return;
+    }
+    this.initialRenderQueued = false;
+    if (this.root == null || this.pendingVisibility.size === 0) {
+      return;
+    }
+    dequeueRender(this.computeRenderRangeAndEmit);
+    this.computeRenderRangeAndEmit();
+  };
+
+  // New files have placeholder heights at the end of a mount batch. Read their
+  // positions before rendering any content so the first paint can include
+  // visible rows without alternating DOM writes and layout reads during mount.
+  private measureInitialVisibility(): void {
+    if (this.pendingVisibility.size === 0) {
+      return;
+    }
+    const rootTop =
+      this.getScrollContainerElement()?.getBoundingClientRect().top ?? 0;
+    const margin = this.config.intersectionObserverMargin;
+    const bottom = this.getHeight() + margin;
+    const measurements: {
+      container: HTMLElement;
+      instance: SubscribedInstance;
+      visible: boolean;
+    }[] = [];
+    for (const container of this.pendingVisibility) {
+      const instance = this.observers.get(container);
+      if (instance == null) {
+        continue;
+      }
+      const rect = container.getBoundingClientRect();
+      measurements.push({
+        container,
+        instance,
+        visible:
+          rect.bottom - rootTop >= -margin && rect.top - rootTop <= bottom,
+      });
+    }
+    this.pendingVisibility.clear();
+    for (const { container, instance, visible } of measurements) {
+      this.updateInstanceVisibility(container, instance, visible);
+    }
+  }
+
   private computeRenderRangeAndEmit = () => {
     if (Virtualizer.__STOP) {
       return;
     }
     const wrapperDirty = this.heightDirty || this.scrollHeightDirty;
+    const connectionsChanged =
+      this.pendingVisibility.size > 0 ||
+      this.renderedObservers !== this.observers.size;
+    this.measureInitialVisibility();
     let instancesHaveChanged = this.instancesChanged.size > 0;
 
     // If we got an emitted update from a bunch of instances, we should skip
     // the window check first and attempt to render with existing logic first
-    // and then queue up a corrected render after
-    if (this.instancesChanged.size === 0) {
+    // and then queue up a corrected render after. New connections already have
+    // their placeholder layout, so use its current window for the first render.
+    if (this.instancesChanged.size === 0 || connectionsChanged) {
       const windowSpecs = createWindowFromScrollPosition({
         scrollTop: this.getScrollTop(),
         height: this.getHeight(),
@@ -577,6 +641,23 @@ export class Virtualizer {
     return bestAnchor;
   }
 
+  // Keep the instance flag and the virtualizer's visible set in sync.
+  private updateInstanceVisibility(
+    container: HTMLElement,
+    instance: SubscribedInstance,
+    visible: boolean
+  ): void {
+    if (visible && !this.visibleInstances.has(container)) {
+      instance.setVisibility(true);
+      this.visibleInstances.set(container, instance);
+      this.visibleInstancesDirty = true;
+    } else if (!visible && this.visibleInstances.has(container)) {
+      instance.setVisibility(false);
+      this.visibleInstances.delete(container);
+      this.visibleInstancesDirty = true;
+    }
+  }
+
   private handleIntersectionChange = (
     entries: IntersectionObserverEntry[]
   ): void => {
@@ -593,15 +674,8 @@ export class Virtualizer {
       if (instance == null) {
         continue;
       }
-      if (isIntersecting && !this.visibleInstances.has(target)) {
-        instance.setVisibility(true);
-        this.visibleInstances.set(target, instance);
-        this.visibleInstancesDirty = true;
-      } else if (!isIntersecting && this.visibleInstances.has(target)) {
-        instance.setVisibility(false);
-        this.visibleInstances.delete(target);
-        this.visibleInstancesDirty = true;
-      }
+      this.pendingVisibility.delete(target);
+      this.updateInstanceVisibility(target, instance, isIntersecting);
     }
 
     if (this.visibleInstancesDirty) {

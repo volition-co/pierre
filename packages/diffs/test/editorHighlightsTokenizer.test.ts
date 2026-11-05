@@ -47,17 +47,23 @@ test.each(['file', 'virtualized'])(
     try {
       const source = { name: 'batch.ts', contents, lang: 'typescript' };
       if (file instanceof VirtualizedFile) file.updateCodeViewLayout(source, 0);
-      file.render({
-        file: source,
-        fileContainer,
-        forceRender: true,
-        renderRange: {
-          startingLine: 0,
-          totalLines: 6,
-          bufferBefore: 0,
-          bufferAfter: 0,
-        },
-      });
+      const render = () =>
+        file.render({
+          file: source,
+          fileContainer,
+          forceRender: true,
+          renderRange: {
+            startingLine: 0,
+            totalLines: 6,
+            bufferBefore: 0,
+            bufferAfter: 0,
+          },
+        });
+      render();
+      if (file instanceof VirtualizedFile) {
+        file.setVisibility(true);
+        render();
+      }
       editor.edit(file);
       await waitFor(() => editor.getText() === contents);
       // Settle the initial tokenization before testing a structural batch.

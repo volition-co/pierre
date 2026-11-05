@@ -1,9 +1,24 @@
-import { expect, test } from 'bun:test';
+import { afterAll, beforeAll, expect, test } from 'bun:test';
 
 import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { Virtualizer } from '../src/components/Virtualizer';
+import {
+  disposeHighlighter,
+  getSharedHighlighter,
+} from '../src/highlighter/shared_highlighter';
 import type { FileContents } from '../src/types';
 import { createRoot, installDom, wait, waitFor } from './domHarness';
+
+// These tests cover file replacement after rows are ready, rather than cold
+// highlighter startup, which has separate coverage.
+beforeAll(async () => {
+  await getSharedHighlighter({
+    themes: ['pierre-dark', 'pierre-light'],
+    langs: ['typescript'],
+  });
+});
+
+afterAll(disposeHighlighter);
 
 function makeNamedFile(name: string, label = 'line'): FileContents {
   return {
@@ -41,18 +56,12 @@ test('updates the rendered header when a live instance swaps to a renamed file',
     virtualizer.setup(root);
     await wait(10);
 
-    const instance = new VirtualizedFile(
-      {},
-      virtualizer,
-      undefined,
-      undefined,
-      () => undefined
-    );
+    const instance = new VirtualizedFile({}, virtualizer);
     instance.render({
       file: makeNamedFile('before.ts'),
       fileContainer: container,
     });
-    await wait(10);
+    await waitFor(() => headerText(container).includes('before.ts'));
     expect(headerText(container)).toContain('before.ts');
 
     // Host-driven swap with forceRender false — the shape the React wrapper
@@ -90,10 +99,7 @@ test('prepareCodeViewItem drops measured heights when the file is replaced', asy
 
     const instance = new VirtualizedFile(
       { overflow: 'wrap', disableFileHeader: true },
-      virtualizer,
-      undefined,
-      undefined,
-      () => undefined
+      virtualizer
     );
     const wrappedFile = makeNamedFile('wrapped.ts');
     instance.render({ file: wrappedFile, fileContainer: container });
@@ -103,7 +109,9 @@ test('prepareCodeViewItem drops measured heights when the file is replaced', asy
     // value is the estimate-based height for a fresh layout cache.
     const estimatedHeight = instance.updateCodeViewLayout(wrappedFile, 0);
     expect(estimatedHeight).toBeGreaterThan(0);
-    await wait(10);
+    await waitFor(
+      () => container.shadowRoot?.querySelector('[data-line]') != null
+    );
 
     // jsdom rows measure 0px, so reconciling seeds every rendered line with a
     // measured height that differs from the estimate.
@@ -138,18 +146,12 @@ test('updates the header when the swap lands while the file is hidden', async ()
     virtualizer.setup(root);
     await wait(10);
 
-    const instance = new VirtualizedFile(
-      {},
-      virtualizer,
-      undefined,
-      undefined,
-      () => undefined
-    );
+    const instance = new VirtualizedFile({}, virtualizer);
     instance.render({
       file: makeNamedFile('before.ts'),
       fileContainer: container,
     });
-    await wait(10);
+    await waitFor(() => headerText(container).includes('before.ts'));
     expect(headerText(container)).toContain('before.ts');
 
     // Hide into a placeholder, then swap the file while hidden. The changed

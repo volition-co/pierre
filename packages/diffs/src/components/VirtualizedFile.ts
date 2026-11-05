@@ -413,6 +413,22 @@ export class VirtualizedFile<
     if (this.fileContainer == null || file == null) {
       return false;
     }
+    // Wrapper changes can move an unchanged off-screen placeholder without
+    // changing its contents or height. Measure it when it becomes visible
+    // instead of rebuilding every placeholder during a virtualizer pass.
+    if (
+      this.isSimpleMode() &&
+      !this.isVisible &&
+      this.placeHolder != null &&
+      !this.layoutDirty &&
+      this.pendingRender != null &&
+      !this.forceRenderOverride
+    ) {
+      if (dirty) {
+        this.top = undefined;
+      }
+      return false;
+    }
     if (dirty) {
       this.top = this.getVirtualizedTop();
     }
@@ -916,7 +932,6 @@ export class VirtualizedFile<
     if (!isSetup) {
       this.computeApproximateSize(false, pendingRenderFile);
       const virtualizer = this.getSimpleVirtualizer();
-      this.top ??= this.getVirtualizedTop();
       if (this.isAdvancedMode()) {
         this.isVisible = true;
       } else {
@@ -925,15 +940,11 @@ export class VirtualizedFile<
             'VirtualizedFile.render: simple virtualizer is not available'
           );
         }
+        // Measure visibility after initial placeholders have their heights.
         virtualizer.connect(fileContainer, this);
-        this.isVisible = virtualizer.isInstanceVisible(
-          this.top ?? 0,
-          this.height
-        );
       }
       this.isSetup = true;
     } else {
-      this.top ??= this.getVirtualizedTop();
       if (this.layoutDirty && this.isSimpleMode()) {
         this.getSimpleVirtualizer()?.markDOMDirty();
         this.computeApproximateSize(false, pendingRenderFile);
@@ -951,6 +962,7 @@ export class VirtualizedFile<
       return this.renderPlaceholder(this.height);
     }
 
+    this.top ??= this.getVirtualizedTop();
     const windowSpecs = this.virtualizer.getWindowSpecs();
     const fileTop = this.top ?? 0;
     const renderRange = this.computeRenderRangeFromWindow(
@@ -985,7 +997,14 @@ export class VirtualizedFile<
     // reconciliation for every applied content render so line deltas
     // (wrapped lines, annotation heights) survive layout resets.
     if (this.isSimpleMode()) {
-      this.getSimpleVirtualizer()?.requestHeightReconcile(this);
+      const virtualizer = this.getSimpleVirtualizer();
+      // A hidden data replacement can render content before returning to its
+      // placeholder. Queue that transition even if geometry reads consumed the
+      // wrapper's dirty flags during the content render.
+      if (!this.isVisible) {
+        virtualizer?.instanceChanged(this, false);
+      }
+      virtualizer?.requestHeightReconcile(this);
     }
   }
 

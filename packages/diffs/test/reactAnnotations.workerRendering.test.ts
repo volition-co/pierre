@@ -113,6 +113,12 @@ async function createFixture() {
       );
       await wait(20);
     });
+    await act(async () => {
+      for (const host of container.querySelectorAll('diffs-container')) {
+        dom.triggerIntersectionObserver(host, true);
+      }
+      await wait(20);
+    });
   };
   const respond = async (
     type: 'file' | 'diff',
