@@ -1449,7 +1449,10 @@ export class VirtualizedFileDiff<
       !areDiffTargetsEqual(this.getInputDiff(), nextFileDiff);
     const dataChanged = targetChanged || filesDidChange;
 
-    fileContainer = this.getOrCreateFileContainer(fileContainer);
+    fileContainer = this.getOrCreateFileContainer(
+      fileContainer,
+      fileInputProps.containerWrapper
+    );
 
     if (nextFileDiff == null) {
       console.error(

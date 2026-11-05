@@ -930,7 +930,10 @@ export class VirtualizedFile<
       this.resetLayoutCache();
     }
 
-    fileContainer = this.getOrCreateFileContainerNode(fileContainer);
+    fileContainer = this.getOrCreateFileContainerNode(
+      fileContainer,
+      props.containerWrapper
+    );
 
     if (!isSetup) {
       this.computeApproximateSize(false, pendingRenderFile);
