@@ -107,7 +107,13 @@ function createRecordingVirtualizer(root: HTMLElement) {
   const virtualizer = {
     type: 'simple',
     config: {},
-    connect() {},
+    // Report visibility synchronously so renders complete inline.
+    connect(
+      _container: HTMLElement,
+      instance: { setVisibility(visible: boolean): void }
+    ) {
+      instance.setVisibility(true);
+    },
     disconnect() {},
     getRoot: () => root,
     getWindowSpecs: () => ({ top: 0, bottom: 800 }),

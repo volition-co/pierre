@@ -88,8 +88,10 @@ describe('editing before a cold first render completes', () => {
       { disableFileHeader: true, theme: DEFAULT_THEMES },
       virtualizer
     );
+    // First render is a placeholder; the queued content render hits the
+    // cold highlighter.
     expect(instance.render({ file, fileContainer, forceRender: true })).toBe(
-      false
+      true
     );
     editor.edit(instance);
     await expectEditableAfterHighlight();
@@ -108,9 +110,11 @@ describe('editing before a cold first render completes', () => {
         { diffStyle, disableFileHeader: true, theme: DEFAULT_THEMES },
         virtualizer
       );
+      // First render is a placeholder; the queued content render hits the
+      // cold highlighter.
       expect(
         instance.render({ fileDiff, fileContainer, forceRender: true })
-      ).toBe(false);
+      ).toBe(true);
       editor.edit(instance);
       await expectEditableAfterHighlight();
       editor.cleanUp();

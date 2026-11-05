@@ -7,6 +7,7 @@ import { areVirtualWindowSpecsEqual } from '../utils/areVirtualWindowSpecsEqual'
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
 
 interface SubscribedInstance {
+  getVirtualizedHeight(): number;
   onRender(dirty: boolean): boolean;
   reconcileHeights(): boolean;
   setVisibility(visible: boolean): void;
@@ -81,6 +82,8 @@ export class Virtualizer {
   private scrollHeightDirty = true;
   private renderedObservers = 0;
   private connectQueue: Map<HTMLElement, SubscribedInstance> = new Map();
+  // Connected instances awaiting their first IntersectionObserver entry.
+  private pendingVisibility: Map<HTMLElement, SubscribedInstance> = new Map();
 
   constructor(config?: Partial<VirtualizerConfig>) {
     this.config = { ...DEFAULT_VIRTUALIZER_CONFIG, ...config };
@@ -289,6 +292,7 @@ export class Virtualizer {
       // FIXME(amadeus): Go through the connection phase a bit more closely...
       this.intersectionObserver.observe(container);
       this.observers.set(container, instance);
+      this.pendingVisibility.set(container, instance);
       this.instancesChanged.add(instance);
       this.markDOMDirty();
       queueRender(this.computeRenderRangeAndEmit);
@@ -304,6 +308,7 @@ export class Virtualizer {
     }
     this.intersectionObserver?.unobserve(container);
     this.observers.delete(container);
+    this.pendingVisibility.delete(container);
     this.instancesChanged.delete(instance);
     this.reconcileQueue.delete(instance);
     if (this.visibleInstances.delete(container)) {
@@ -345,10 +350,31 @@ export class Virtualizer {
     queueRender(this.computeRenderRangeAndEmit);
   };
 
+  // Estimate visibility for newly connected instances before the first paint.
+  // Offsets are read before any render, so a batch costs one layout.
+  private resolvePendingVisibility(): void {
+    if (this.pendingVisibility.size === 0) {
+      return;
+    }
+    for (const [container, instance] of this.pendingVisibility) {
+      if (this.visibleInstances.has(container)) {
+        continue;
+      }
+      const top = this.getOffsetInScrollContainer(container);
+      if (this.isInstanceVisible(top, instance.getVirtualizedHeight())) {
+        instance.setVisibility(true);
+        this.visibleInstances.set(container, instance);
+        this.visibleInstancesDirty = true;
+      }
+    }
+    this.pendingVisibility.clear();
+  }
+
   private computeRenderRangeAndEmit = () => {
     if (Virtualizer.__STOP) {
       return;
     }
+    this.resolvePendingVisibility();
     const wrapperDirty = this.heightDirty || this.scrollHeightDirty;
     let instancesHaveChanged = this.instancesChanged.size > 0;
 
@@ -593,6 +619,8 @@ export class Virtualizer {
       if (instance == null) {
         continue;
       }
+      // Observer entries override any pending estimate.
+      this.pendingVisibility.delete(target);
       if (isIntersecting && !this.visibleInstances.has(target)) {
         instance.setVisibility(true);
         this.visibleInstances.set(target, instance);

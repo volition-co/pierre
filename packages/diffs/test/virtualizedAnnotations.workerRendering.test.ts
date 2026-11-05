@@ -60,7 +60,13 @@ async function createFixture(
   const virtualizer = {
     type: mode,
     config: {},
-    connect() {},
+    // Report visibility synchronously so renders complete inline.
+    connect(
+      _container: HTMLElement,
+      instance: { setVisibility(visible: boolean): void }
+    ) {
+      instance.setVisibility(true);
+    },
     disconnect() {},
     getWindowSpecs: () => window,
     getOffsetInScrollContainer: () => 0,

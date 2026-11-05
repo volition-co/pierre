@@ -26,6 +26,7 @@ test('requestHeightReconcile reconciles instances the pass did not repaint', asy
         return true;
       },
       setVisibility: () => {},
+      getVirtualizedHeight: () => 0,
     };
 
     const container = document.createElement('diffs-container');

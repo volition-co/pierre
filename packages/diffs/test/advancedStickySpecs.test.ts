@@ -44,7 +44,13 @@ const ITEM_TOP = 1000;
 const virtualizer = {
   type: 'simple',
   config: {},
-  connect() {},
+  // Report visibility synchronously so renders complete inline.
+  connect(
+    _container: HTMLElement,
+    instance: { setVisibility(visible: boolean): void }
+  ) {
+    instance.setVisibility(true);
+  },
   disconnect() {},
   getWindowSpecs() {
     return { top: 0, bottom: 0 };

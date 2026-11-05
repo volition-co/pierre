@@ -1003,8 +1003,14 @@ describe('VirtualizedFileDiff worker rendering', () => {
       expect(instance.render({ fileDiff: currentDiff, fileContainer })).toBe(
         true
       );
-      expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('current');
+      // Content renders in the frame after visibility is reported.
+      expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain(
+        'data-placeholder'
+      );
       dom.triggerIntersectionObserver(fileContainer, true);
+      await waitFor(() =>
+        expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('current')
+      );
       await waitFor(() => expect(onRender).toHaveReturnedWith(false));
 
       // The replacement keeps the highlighted current diff visible, and the
@@ -1107,8 +1113,14 @@ describe('VirtualizedFile worker rendering', () => {
       virtualizer.setup(root, content);
 
       expect(instance.render({ file: currentFile, fileContainer })).toBe(true);
-      expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('current');
+      // Content renders in the frame after visibility is reported.
+      expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain(
+        'data-placeholder'
+      );
       dom.triggerIntersectionObserver(fileContainer, true);
+      await waitFor(() =>
+        expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('current')
+      );
       await waitFor(() => expect(onRender).toHaveReturnedWith(false));
 
       expect(instance.render({ file: replacementFile })).toBe(true);
@@ -1913,7 +1925,13 @@ describe('rendering when an editor attaches', () => {
       const virtualizer = {
         type: 'simple',
         config: {},
-        connect() {},
+        // Report visibility synchronously so renders complete inline.
+        connect(
+          _container: HTMLElement,
+          instance: { setVisibility(visible: boolean): void }
+        ) {
+          instance.setVisibility(true);
+        },
         disconnect() {},
         getRoot: () => root,
         getWindowSpecs: () => ({ top: 0, bottom: 800 }),

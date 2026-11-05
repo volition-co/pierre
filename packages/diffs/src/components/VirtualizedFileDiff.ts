@@ -1472,7 +1472,6 @@ export class VirtualizedFileDiff<
     if (!isSetup) {
       this.computeApproximateSize(false, pendingRenderDiff);
       const virtualizer = this.getSimpleVirtualizer();
-      this.top ??= this.getVirtualizedTop();
       if (this.isAdvancedMode()) {
         this.isVisible = true;
       } else {
@@ -1481,15 +1480,12 @@ export class VirtualizedFileDiff<
             'VirtualizedFileDiff.render: simple virtualizer is not available'
           );
         }
+        // Visibility arrives via setVisibility; reading the offset here would
+        // force a layout per file while a list mounts.
         virtualizer.connect(fileContainer, this);
-        this.isVisible = virtualizer.isInstanceVisible(
-          this.top ?? 0,
-          this.height
-        );
       }
       this.isSetup = true;
     } else {
-      this.top ??= this.getVirtualizedTop();
       if (this.layoutDirty && this.isSimpleMode()) {
         this.getSimpleVirtualizer()?.markDOMDirty();
         this.computeApproximateSize(false, pendingRenderDiff);
@@ -1506,7 +1502,7 @@ export class VirtualizedFileDiff<
       }
       return this.renderPlaceholder(this.height);
     }
-
+    this.top ??= this.getVirtualizedTop();
     const windowSpecs = this.virtualizer.getWindowSpecs();
     const fileTop = this.top ?? 0;
     const renderRange = this.computeRenderRangeFromWindow(

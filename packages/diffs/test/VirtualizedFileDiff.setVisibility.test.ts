@@ -32,7 +32,13 @@ function createVirtualizer(isVisible: boolean): Virtualizer {
   return {
     config: { resizeDebugging: false },
     type: 'simple',
-    connect() {},
+    // Report visibility synchronously so renders complete inline.
+    connect(
+      _container: HTMLElement,
+      instance: { setVisibility(visible: boolean): void }
+    ) {
+      instance.setVisibility(isVisible);
+    },
     disconnect() {},
     getOffsetInScrollContainer() {
       return 0;

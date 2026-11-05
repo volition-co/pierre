@@ -124,18 +124,55 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     }
   }
 
-  // jsdom does not implement IntersectionObserver either; observation
-  // bookkeeping is enough for components (e.g. the Virtualizer) to construct
-  // and manage observers. Entries never intersect on their own; tests deliver
-  // visibility changes through triggerIntersectionObserver when needed.
+  // jsdom lacks IntersectionObserver. Like a browser, the mock delivers an
+  // initial entry per target asynchronously from its rect (zero in jsdom, so
+  // intersecting unless stubbed). Tests drive later changes through
+  // triggerIntersectionObserver.
   const intersectionObservers = new Set<MockIntersectionObserver>();
+  const pendingIntersectionTimeouts = new Set<ReturnType<typeof setTimeout>>();
   class MockIntersectionObserver {
     observed = new Set<Element>();
-    constructor(public callback: IntersectionObserverCallback) {
+    #root: Element | Document | null;
+    #verticalMargin: number;
+    constructor(
+      public callback: IntersectionObserverCallback,
+      options: IntersectionObserverInit = {}
+    ) {
+      this.#root = options.root ?? null;
+      const margin = Number.parseFloat(options.rootMargin ?? '0');
+      this.#verticalMargin = Number.isNaN(margin) ? 0 : margin;
       intersectionObservers.add(this);
     }
     observe(target: Element): void {
       this.observed.add(target);
+      const timeout = setTimeout(() => {
+        pendingIntersectionTimeouts.delete(timeout);
+        if (!intersectionObservers.has(this) || !this.observed.has(target)) {
+          return;
+        }
+        this.callback(
+          [
+            {
+              isIntersecting: this.#isIntersecting(target),
+              target,
+            } as IntersectionObserverEntry,
+          ],
+          this as unknown as IntersectionObserver
+        );
+      }, 0);
+      pendingIntersectionTimeouts.add(timeout);
+    }
+    #isIntersecting(target: Element): boolean {
+      const rect = target.getBoundingClientRect();
+      const root = this.#root;
+      const rootRect =
+        root != null && 'getBoundingClientRect' in root
+          ? root.getBoundingClientRect()
+          : { top: 0, bottom: dom.window.innerHeight };
+      return (
+        rect.bottom >= rootRect.top - this.#verticalMargin &&
+        rect.top <= rootRect.bottom + this.#verticalMargin
+      );
     }
     unobserve(target: Element): void {
       this.observed.delete(target);
@@ -298,6 +335,10 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
         clearTimeout(timeout);
       }
       frames.clear();
+      for (const timeout of pendingIntersectionTimeouts) {
+        clearTimeout(timeout);
+      }
+      pendingIntersectionTimeouts.clear();
       intersectionObservers.clear();
       resizeObservers.clear();
 
